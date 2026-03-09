@@ -306,6 +306,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
     </div>
     <div class="form-card" style="padding:14px 18px;">
       <div class="total-row"><div class="total-label">Order Total</div><div class="total-val" id="o-total">₦0</div></div>
+      <div id="stock-warning" style="display:none;margin-top:10px;padding:9px 12px;background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-b);border-radius:10px;font-size:0.75rem;font-weight:600;"></div>
     </div>
     <div class="fg"><label class="fl">Notes (optional)</label><input type="text" class="fi" id="o-notes" placeholder="Special instructions..."></div>
     <button class="btn-submit" onclick="reviewOrder()">
@@ -496,7 +497,7 @@ let repRefreshInterval = null;
 
 function startRepRefresh() {
   if (repRefreshInterval) clearInterval(repRefreshInterval);
-  repRefreshInterval = setInterval(() => {
+  repRefreshInterval = setInterval(async () => {
     const ordersActive = document.getElementById('page-orders')?.classList.contains('active');
     const homeActive = document.getElementById('page-home')?.classList.contains('active');
     if (ordersActive) loadOrders();
@@ -504,7 +505,7 @@ function startRepRefresh() {
   }, 60000);
 }
 
-function checkSession() {
+async function checkSession() {
   const t = localStorage.getItem('lw_rep_tok'), u = localStorage.getItem('lw_rep_u');
   if (!t || !u) return;
   try {
@@ -676,6 +677,8 @@ function reviewOrder() {
   if (!name||!phone||!loc||!pid||qty<1) { toast('Fill in all required fields','error'); return; }
   const opt = sel.options[sel.selectedIndex];
   const price = parseFloat(opt.getAttribute('data-price'))||0;
+  const stock = parseInt(opt.getAttribute('data-stock')||0);
+  if (stock > 0 && qty > stock) { toast(`Only ${stock} units available in stock`,'error'); return; }
   const total = price * qty;
   pendingOrder = { customer_name:name, customer_phone:phone, delivery_location:loc, product_id:pid, quantity:qty, unit_price:price, total_price:total, notes, rep_id:profile.id, status:'pending' };
   document.getElementById('mo-body').innerHTML = `
