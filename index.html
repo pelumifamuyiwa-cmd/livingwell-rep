@@ -165,6 +165,32 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .btn-logout{width:100%;background:var(--red-bg);color:var(--red);border:1.5px solid var(--red-b);border-radius:var(--r-sm);padding:13px;font-size:0.88rem;font-weight:700;font-family:'Sora',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;margin-top:14px;transition:all .15s}
 .btn-logout svg{width:15px;height:15px}
 
+
+/* PERF TABS */
+.perf-tabs{display:flex;gap:0;background:var(--bg3);border-radius:12px;padding:4px;margin-bottom:16px}
+.perf-tab{flex:1;padding:8px;border:none;background:none;font-family:'Sora',sans-serif;font-size:0.75rem;font-weight:600;color:var(--text2);border-radius:9px;cursor:pointer;transition:all .15s}
+.perf-tab.active{background:var(--bg);color:var(--purple);box-shadow:0 1px 6px rgba(124,58,237,0.12)}
+
+/* LEADERBOARD */
+.lb-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);transition:background .1s}
+.lb-row:last-child{border-bottom:none}
+.lb-rank{width:24px;height:24px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:800;flex-shrink:0}
+.lb-rank.gold{background:#FEF3C7;color:#D97706}
+.lb-rank.silver{background:#F1F5F9;color:#64748B}
+.lb-rank.bronze{background:#FEF0E7;color:#C2410C}
+.lb-rank.other{background:var(--bg3);color:var(--text3)}
+.lb-av{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#7C3AED,#A855F7);display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:800;color:white;flex-shrink:0}
+.lb-av.me{box-shadow:0 0 0 2px var(--purple)}
+.lb-info{flex:1;min-width:0}
+.lb-name{font-size:0.82rem;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb-name.me{color:var(--purple)}
+.lb-ref{font-size:0.65rem;color:var(--text3);font-family:'DM Mono',monospace}
+.lb-stats{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.lb-pct{font-size:0.85rem;font-weight:800;color:var(--text)}
+.lb-pct.me{color:var(--purple)}
+.lb-orders{font-size:0.62rem;color:var(--text3)}
+.you-badge{font-size:0.55rem;font-weight:700;background:var(--purple-dim);color:var(--purple);padding:2px 6px;border-radius:8px;margin-left:4px;vertical-align:middle}
+
 /* EMPTY */
 .empty{text-align:center;padding:36px 18px}
 .empty-ico{width:58px;height:58px;background:var(--bg3);border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
@@ -304,12 +330,22 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 
   <!-- PERFORMANCE -->
   <div class="page" id="page-perf">
-    <div class="ph"><div class="pt">My Performance</div><div class="ps">Delivery success & revenue stats</div></div>
-    <div class="perf-hero">
-      <div class="ph-label">Delivery Success Rate</div>
-      <div class="ph-score" id="p-score">0<sub>%</sub></div>
-      <div class="ph-sub">Based on confirmed deliveries</div>
+    <div class="ph"><div class="pt">Performance</div><div class="ps">Your stats & team leaderboard</div></div>
+
+    <!-- PERIOD TABS -->
+    <div class="perf-tabs">
+      <button class="perf-tab active" id="tab-weekly" onclick="switchPerfTab('weekly')">This Week</button>
+      <button class="perf-tab" id="tab-alltime" onclick="switchPerfTab('alltime')">All Time</button>
     </div>
+
+    <!-- MY STATS HERO -->
+    <div class="perf-hero">
+      <div class="ph-label">My Success Rate</div>
+      <div class="ph-score" id="p-score">0<sub>%</sub></div>
+      <div class="ph-sub" id="p-period-label">This week's deliveries</div>
+    </div>
+
+    <!-- STAT CARDS -->
     <div class="p-grid">
       <div class="p-card">
         <div class="p-card-icon" style="background:var(--bg3)"><svg viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2" stroke-linecap="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg></div>
@@ -328,6 +364,8 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
         <div class="p-card-v" id="p-can" style="color:var(--red)">0</div><div class="p-card-l">Cancelled</div>
       </div>
     </div>
+
+    <!-- SUMMARY BARS -->
     <div class="bar-card">
       <div class="bar-top"><span class="bar-name">Delivery Success</span><span class="bar-pct" id="bp1">0%</span></div>
       <div class="bar-track"><div class="bar-fill" id="bf1" style="width:0%;background:linear-gradient(90deg,#059669,#34D399)"></div></div>
@@ -340,12 +378,15 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
       <div class="bar-top"><span class="bar-name">Cancellation Rate</span><span class="bar-pct" id="bp3">0%</span></div>
       <div class="bar-track"><div class="bar-fill" id="bf3" style="width:0%;background:linear-gradient(90deg,#DC2626,#F87171)"></div></div>
     </div>
-    <div class="card">
-      <div class="ch"><div class="ch-t">Revenue Summary</div></div>
-      <div style="padding:4px 18px 6px">
-        <div class="rev-row"><span class="rev-l">Total Order Value</span><span class="rev-v" id="rv1" style="color:var(--purple)">₦0</span></div>
-        <div class="rev-row"><span class="rev-l">Confirmed Revenue</span><span class="rev-v" id="rv2" style="color:var(--green)">₦0</span></div>
-        <div class="rev-row"><span class="rev-l">Pending Revenue</span><span class="rev-v" id="rv3" style="color:var(--amber)">₦0</span></div>
+
+    <!-- TEAM LEADERBOARD -->
+    <div class="card" style="margin-top:6px">
+      <div class="ch">
+        <div class="ch-t">Team Leaderboard</div>
+        <span class="badge b-pending" id="lb-period-badge">This Week</span>
+      </div>
+      <div id="leaderboard-list">
+        <div class="loader"><div class="ld"></div><div class="ld"></div><div class="ld"></div></div>
       </div>
     </div>
   </div>
@@ -625,9 +666,41 @@ async function submitOrder() {
 }
 
 // PERFORMANCE
+let currentPerfTab = 'weekly';
+
+function getWeekRange() {
+  const now = new Date();
+  const day = now.getDay();
+  const diffToMon = day === 0 ? -6 : 1 - day;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMon);
+  monday.setHours(0,0,0,0);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23,59,59,999);
+  return { start: monday.toISOString(), end: sunday.toISOString() };
+}
+
+function switchPerfTab(tab) {
+  currentPerfTab = tab;
+  document.querySelectorAll('.perf-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  document.getElementById('p-period-label').textContent = tab === 'weekly' ? "This week's deliveries" : "All time deliveries";
+  document.getElementById('lb-period-badge').textContent = tab === 'weekly' ? 'This Week' : 'All Time';
+  loadPerf();
+}
+
 async function loadPerf() {
   try {
-    const orders = await api(`orders?rep_id=eq.${profile.id}&select=*`) || [];
+    const week = getWeekRange();
+    const isWeekly = currentPerfTab === 'weekly';
+
+    // Load my orders (filtered by period)
+    const myOrdersQuery = isWeekly
+      ? `orders?rep_id=eq.${profile.id}&created_at=gte.${week.start}&created_at=lte.${week.end}&select=*`
+      : `orders?rep_id=eq.${profile.id}&select=*`;
+    const orders = await api(myOrdersQuery) || [];
+
     const total = orders.length;
     const dp = orders.filter(o=>o.status==='delivered_payment_made').length;
     const da = orders.filter(o=>o.status==='delivered_awaiting_payment').length;
@@ -637,9 +710,7 @@ async function loadPerf() {
     const sr = total>0?Math.round((del/total)*100):0;
     const ar = total>0?Math.round((da/total)*100):0;
     const cr = total>0?Math.round((can/total)*100):0;
-    const tv = orders.reduce((s,o)=>s+parseFloat(o.total_price||0),0);
-    const cv = orders.filter(o=>o.status==='delivered_payment_made').reduce((s,o)=>s+parseFloat(o.total_price||0),0);
-    const pv = orders.filter(o=>['pending','assigned','delivered_awaiting_payment'].includes(o.status)).reduce((s,o)=>s+parseFloat(o.total_price||0),0);
+
     document.getElementById('p-score').innerHTML = `${sr}<sub>%</sub>`;
     document.getElementById('p-total').textContent = total;
     document.getElementById('p-del').textContent = del;
@@ -648,9 +719,58 @@ async function loadPerf() {
     document.getElementById('bp1').textContent = `${sr}%`; document.getElementById('bf1').style.width = `${sr}%`;
     document.getElementById('bp2').textContent = `${ar}%`; document.getElementById('bf2').style.width = `${ar}%`;
     document.getElementById('bp3').textContent = `${cr}%`; document.getElementById('bf3').style.width = `${cr}%`;
-    document.getElementById('rv1').textContent = `₦${tv.toLocaleString()}`;
-    document.getElementById('rv2').textContent = `₦${cv.toLocaleString()}`;
-    document.getElementById('rv3').textContent = `₦${pv.toLocaleString()}`;
+
+    // Load leaderboard — all reps
+    const allReps = await api(`profiles?role=eq.rep&is_active=eq.true&select=*`) || [];
+    const allOrdersQuery = isWeekly
+      ? `orders?created_at=gte.${week.start}&created_at=lte.${week.end}&select=rep_id,status`
+      : `orders?select=rep_id,status`;
+    const allOrders = await api(allOrdersQuery) || [];
+
+    // Build stats per rep
+    const repStats = {};
+    allReps.forEach(r => {
+      repStats[r.id] = { name: r.full_name, ref: r.ref_code||'—', total:0, delivered:0, cancelled:0 };
+    });
+    allOrders.forEach(o => {
+      if (!repStats[o.rep_id]) return;
+      repStats[o.rep_id].total++;
+      if (['delivered_payment_made','delivered_awaiting_payment'].includes(o.status)) repStats[o.rep_id].delivered++;
+      if (o.status === 'cancelled') repStats[o.rep_id].cancelled++;
+    });
+
+    // Sort by delivery success rate then total orders
+    const ranked = Object.entries(repStats)
+      .map(([id, s]) => ({ id, ...s, rate: s.total>0 ? Math.round((s.delivered/s.total)*100) : 0 }))
+      .sort((a,b) => b.rate - a.rate || b.total - a.total);
+
+    const rankClasses = ['gold','silver','bronze'];
+    const lbContainer = document.getElementById('leaderboard-list');
+
+    if (!ranked.length) {
+      lbContainer.innerHTML = `<div class="empty"><div class="empty-t">No data yet</div></div>`;
+      return;
+    }
+
+    lbContainer.innerHTML = ranked.map((r, i) => {
+      const isMe = r.id === profile.id;
+      const rankClass = i < 3 ? rankClasses[i] : 'other';
+      const rankLabel = i < 3 ? ['🥇','🥈','🥉'][i] : `${i+1}`;
+      return `
+      <div class="lb-row" style="${isMe ? 'background:var(--bg3);' : ''}">
+        <div class="lb-rank ${rankClass}">${rankLabel}</div>
+        <div class="lb-av ${isMe ? 'me' : ''}">${r.name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2)}</div>
+        <div class="lb-info">
+          <div class="lb-name ${isMe ? 'me' : ''}">${r.name}${isMe ? '<span class="you-badge">YOU</span>' : ''}</div>
+          <div class="lb-ref">${r.ref} · ${r.total} orders</div>
+        </div>
+        <div class="lb-stats">
+          <div class="lb-pct ${isMe ? 'me' : ''}">${r.rate}%</div>
+          <div class="lb-orders">${r.delivered} delivered</div>
+        </div>
+      </div>`;
+    }).join('');
+
   } catch(e) { toast('Failed to load performance','error'); }
 }
 
