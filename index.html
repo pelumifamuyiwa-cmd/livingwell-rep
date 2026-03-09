@@ -492,7 +492,19 @@ async function doLogin() {
   } catch(e) { err.textContent = 'Connection error. Try again.'; err.style.display = 'block'; }
 }
 
-async function checkSession() {
+let repRefreshInterval = null;
+
+function startRepRefresh() {
+  if (repRefreshInterval) clearInterval(repRefreshInterval);
+  repRefreshInterval = setInterval(() => {
+    const ordersActive = document.getElementById('page-orders')?.classList.contains('active');
+    const homeActive = document.getElementById('page-home')?.classList.contains('active');
+    if (ordersActive) loadOrders();
+    if (homeActive) loadHome();
+  }, 60000);
+}
+
+function checkSession() {
   const t = localStorage.getItem('lw_rep_tok'), u = localStorage.getItem('lw_rep_u');
   if (!t || !u) return;
   try {
@@ -525,6 +537,7 @@ function initApp() {
   document.getElementById('p-phone').textContent = profile.phone || '—';
   loadProducts();
   loadHome();
+  startRepRefresh();
 }
 
 // NAV
@@ -542,10 +555,17 @@ function showPage(p) {
 // PRODUCTS
 async function loadProducts() {
   try {
-    products = await api('products?is_active=eq.true&select=*&order=name') || [];
+    // Load products with stock levels
+    products = await api('products?is_active=eq.true&select=*,stock(quantity)&order=name') || [];
     const sel = document.getElementById('o-prod');
     sel.innerHTML = '<option value="">Choose product...</option>' +
-      products.map(p=>`<option value="${p.id}" data-price="${p.price}">${p.name} — ₦${parseFloat(p.price).toLocaleString()}</option>`).join('');
+      products.map(p => {
+        const qty = p.stock?.[0]?.quantity || 0;
+        const outOfStock = qty === 0;
+        const lowStock = qty > 0 && qty <= 5;
+        const label = outOfStock ? ` — OUT OF STOCK` : lowStock ? ` — Low Stock (${qty} left)` : '';
+        return `<option value="${p.id}" data-price="${p.price}" data-stock="${qty}" ${outOfStock ? 'disabled' : ''}>${p.name} — ₦${parseFloat(p.price).toLocaleString()}${label}</option>`;
+      }).join('');
   } catch(e) {}
 }
 
@@ -553,10 +573,25 @@ function calcTotal() {
   const sel = document.getElementById('o-prod');
   const opt = sel.options[sel.selectedIndex];
   const price = opt ? parseFloat(opt.getAttribute('data-price'))||0 : 0;
+  const stock = opt ? parseInt(opt.getAttribute('data-stock')||0) : 0;
   const qty = parseInt(document.getElementById('o-qty').value)||0;
+
   document.getElementById('o-uprice').value = price ? `₦${price.toLocaleString()}` : '';
   document.getElementById('o-total').textContent = `₦${(price*qty).toLocaleString()}`;
+
+  // Warn if quantity exceeds stock
+  const warn = document.getElementById('stock-warning');
+  if (warn) {
+    if (stock > 0 && qty > stock) {
+      warn.textContent = `⚠️ Only ${stock} units available in stock`;
+      warn.style.display = 'block';
+    } else {
+      warn.style.display = 'none';
+    }
+  }
 }
+
+
 
 // HOME
 async function loadHome() {
@@ -610,9 +645,23 @@ function orderHTML(o) {
         <span class="oi-amt">₦${parseFloat(o.total_price||0).toLocaleString()}</span>
         <span class="oi-dt">${new Date(o.created_at).toLocaleDateString('en-GB')}</span>
       </div>
+      ${o.status==='pending' ? `<button onclick="cancelRepOrder('${o.id}')" style="margin-top:6px;padding:4px 10px;background:rgba(220,38,38,0.1);color:#DC2626;border:1px solid rgba(220,38,38,0.2);border-radius:6px;font-size:0.65rem;font-weight:700;cursor:pointer;font-family:'Sora',sans-serif;">Cancel Order</button>` : ''}
     </div>
     <span class="badge b-${o.status}">${STATUS_LABEL[o.status]||o.status}</span>
   </div>`;
+}
+
+async function cancelRepOrder(id) {
+  if (!confirm('Cancel this order?')) return;
+  try {
+    const res = await fetch(`${SB}/rest/v1/orders?id=eq.${id}`, {
+      method:'PATCH', headers:{...authH(),'Prefer':'return=minimal'},
+      body: JSON.stringify({ status: 'cancelled' })
+    });
+    if (!res.ok) throw new Error('Failed');
+    toast('Order cancelled','success');
+    loadOrders(); loadHome();
+  } catch(e) { toast('Failed to cancel order','error'); }
 }
 
 // REVIEW ORDER
