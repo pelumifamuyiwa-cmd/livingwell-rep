@@ -587,7 +587,7 @@ function reviewOrder() {
   const opt = sel.options[sel.selectedIndex];
   const price = parseFloat(opt.getAttribute('data-price'))||0;
   const total = price * qty;
-  pendingOrder = { customer_name:name, customer_phone:phone, delivery_location:loc, product_id:pid, quantity:qty, total_price:total, notes, rep_id:profile.id, status:'pending' };
+  pendingOrder = { customer_name:name, customer_phone:phone, delivery_location:loc, product_id:pid, quantity:qty, unit_price:price, total_price:total, notes, rep_id:profile.id, status:'pending' };
   document.getElementById('mo-body').innerHTML = `
     <div style="display:flex;flex-direction:column;gap:2px;">
       ${[['Customer',name],['Phone',phone],['Location',loc],['Product',opt.text.split(' — ')[0]],['Quantity',`${qty} × ₦${price.toLocaleString()}`]].map(([l,v])=>`
