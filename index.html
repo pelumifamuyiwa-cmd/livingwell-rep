@@ -463,7 +463,11 @@ async function api(path, method='GET', body=null, extra={}) {
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(`${SB}/rest/v1/${path}`, opts);
   if (!r.ok) { const e = await r.json(); throw new Error(e.message||'Error'); }
-  if (r.status === 204) return null;
+  if (r.status === 204 || r.status === 201) {
+    const text = await r.text();
+    if (!text) return null;
+    try { return JSON.parse(text); } catch(e) { return null; }
+  }
   return r.json();
 }
 
@@ -526,6 +530,7 @@ function startRepRealtime() {
         if (ordersActive) loadOrders();
         if (homeActive) loadHome();
         toast('Order status updated!', 'info');
+        triggerRepNotification('📦 Order Update', 'One of your orders has been updated');
       }
     } catch(e) {}
   };
@@ -566,6 +571,7 @@ function initApp() {
   loadProducts();
   loadHome();
   startRepRefresh();
+  setTimeout(requestRepNotifications, 2000);
 }
 
 // NAV
@@ -688,7 +694,7 @@ async function cancelRepOrder(id) {
     });
     if (!res.ok) throw new Error('Failed');
     toast('Order cancelled','success');
-    loadOrders(); loadHome();
+    loadOrders(); loadHome(); loadProducts();
   } catch(e) { toast('Failed to cancel order','error'); }
 }
 
@@ -740,6 +746,7 @@ async function submitOrder() {
     document.getElementById('o-uprice').value='';
     document.getElementById('o-total').textContent='₦0';
     pendingOrder = null;
+    loadProducts();
     setTimeout(()=>showPage('orders'),600);
   } catch(e) { toast('Failed: '+e.message,'error'); }
 }
@@ -851,6 +858,34 @@ async function loadPerf() {
     }).join('');
 
   } catch(e) { toast('Failed to load performance','error'); }
+}
+
+// NOTIFICATIONS
+function triggerRepNotification(title, body) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '/icon.png' });
+  }
+  // Audio ping
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.setValueAtTime(520, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(760, ctx.currentTime+0.1);
+    g.gain.setValueAtTime(0.2, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.4);
+    o.start(ctx.currentTime); o.stop(ctx.currentTime+0.4);
+  } catch(e) {}
+}
+
+async function requestRepNotifications() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'granted') return;
+  if (Notification.permission === 'denied') return;
+  const perm = await Notification.requestPermission();
+  if (perm === 'granted') {
+    new Notification('📦 Living Well', { body: "You'll be notified when your orders are updated." });
+  }
 }
 
 // UTILS
