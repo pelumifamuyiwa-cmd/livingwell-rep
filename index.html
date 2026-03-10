@@ -503,6 +503,33 @@ function startRepRefresh() {
     if (ordersActive) loadOrders();
     if (homeActive) loadHome();
   }, 60000);
+
+  // Realtime subscription — instant update when order status changes
+  startRepRealtime();
+}
+
+let repRealtimeWs = null;
+function startRepRealtime() {
+  if (repRealtimeWs) repRealtimeWs.close();
+  const tok = localStorage.getItem('lw_rep_tok') || KEY;
+  const wsUrl = `${SB.replace('https','wss')}/realtime/v1/websocket?apikey=${KEY}&vsn=1.0.0`;
+  repRealtimeWs = new WebSocket(wsUrl);
+  repRealtimeWs.onopen = () => {
+    repRealtimeWs.send(JSON.stringify({ topic:'realtime:public:orders', event:'phx_join', payload:{ config:{ broadcast:{ack:false,self:false}, presence:{key:''}, postgres_changes:[{event:'UPDATE',schema:'public',table:'orders',filter:`rep_id=eq.${profile.id}`}] }, access_token: tok }, ref:'1' }));
+  };
+  repRealtimeWs.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.event === 'postgres_changes' || (msg.payload?.data?.type === 'UPDATE')) {
+        const ordersActive = document.getElementById('page-orders')?.classList.contains('active');
+        const homeActive = document.getElementById('page-home')?.classList.contains('active');
+        if (ordersActive) loadOrders();
+        if (homeActive) loadHome();
+        toast('Order status updated!', 'info');
+      }
+    } catch(e) {}
+  };
+  repRealtimeWs.onclose = () => { setTimeout(startRepRealtime, 5000); };
 }
 
 async function checkSession() {
@@ -539,8 +566,6 @@ function initApp() {
   loadProducts();
   loadHome();
   startRepRefresh();
-  startRealtimeListener();
-  showNotifBannerIfNeeded();
 }
 
 // NAV
@@ -840,136 +865,6 @@ function toast(msg, type='') {
 // INIT
 checkSession();
 document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
-
-// ── PUSH NOTIFICATIONS ──
-const VAPID_PUBLIC = 'BEl62iUYgUivxIkv69yViEuiBIa40HI85NalKAnbmkk1p3_sO0-L-PFlHLsWRaRSaTfoskth6nZQ78360itU-iI';
-
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
-}
-
-async function registerServiceWorker() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-  try {
-    const reg = await navigator.serviceWorker.register('/sw.js');
-    return reg;
-  } catch(e) { console.log('SW reg failed:', e); }
-}
-
-async function subscribeToPush(reg) {
-  try {
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC)
-    });
-    // Save subscription to Supabase
-    const subData = JSON.parse(JSON.stringify(sub));
-    await fetch(`${SB}/rest/v1/push_subscriptions`, {
-      method: 'POST',
-      headers: { ...H, 'Authorization': `Bearer ${tok()}`, 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ user_id: user.id, subscription: subData, portal: 'rep', created_at: new Date().toISOString() })
-    });
-    return true;
-  } catch(e) { console.log('Push subscribe failed:', e); return false; }
-}
-
-async function enableNotifications() {
-  const banner = document.getElementById('notif-banner');
-  const perm = await Notification.requestPermission();
-  if (perm === 'granted') {
-    const reg = await registerServiceWorker();
-    if (reg) {
-      const ok = await subscribeToPush(reg);
-      if (ok) {
-        banner.style.display = 'none';
-        localStorage.setItem('lw_notif_accepted', '1');
-        new Notification('🔔 Living Well', { body: 'Notifications enabled! You\'ll be pinged for new orders.', icon: '/icon.png' });
-      }
-    }
-  } else {
-    banner.style.display = 'none';
-    localStorage.setItem('lw_notif_declined', '1');
-  }
-}
-
-function dismissNotifBanner() {
-  document.getElementById('notif-banner').style.display = 'none';
-  localStorage.setItem('lw_notif_declined', '1');
-}
-
-function showNotifBannerIfNeeded() {
-  if (!('Notification' in window)) return;
-  if (Notification.permission === 'granted') { registerServiceWorker(); return; }
-  if (Notification.permission === 'denied') return;
-  if (localStorage.getItem('lw_notif_accepted') || localStorage.getItem('lw_notif_declined')) return;
-  setTimeout(() => { document.getElementById('notif-banner').style.display = 'flex'; }, 1500);
-}
-
-// Supabase Realtime — listen for new orders assigned to this rep
-let realtimeChannel = null;
-function startRealtimeListener() {
-  if (realtimeChannel) return;
-  const wsUrl = `${SB.replace('https','wss')}/realtime/v1/websocket?apikey=${KEY}&vsn=1.0.0`;
-  const ws = new WebSocket(wsUrl);
-  realtimeChannel = ws;
-
-  ws.onopen = () => {
-    ws.send(JSON.stringify({ topic: 'realtime:public:orders', event: 'phx_join', payload: {}, ref: '1' }));
-  };
-
-  ws.onmessage = (e) => {
-    try {
-      const msg = JSON.parse(e.data);
-      if (msg.event === 'INSERT' && msg.payload?.record) {
-        const rec = msg.payload.record;
-        if (rec.rep_id === profile?.id) {
-          triggerNotification('🛍️ New Order Received', `Customer: ${rec.customer_name || 'New order'} — tap to view`);
-          loadHome(); loadOrders();
-        }
-      }
-    } catch(err) {}
-  };
-
-  // Heartbeat to keep connection alive
-  setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: '0' })); }, 25000);
-}
-
-function triggerNotification(title, body) {
-  // In-browser notification
-  if (Notification.permission === 'granted') {
-    new Notification(title, { body, icon: '/icon.png', badge: '/icon.png', vibrate: [200, 100, 200] });
-  }
-  // In-app toast as fallback
-  showToast(`${title}: ${body}`, 'success');
-  // Play ping sound
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = ctx.createOscillator(); const g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.frequency.setValueAtTime(880, ctx.currentTime);
-    o.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.3);
-    g.gain.setValueAtTime(0.3, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-    o.start(ctx.currentTime); o.stop(ctx.currentTime + 0.5);
-  } catch(e) {}
-}
 </script>
-
-<!-- Notification Permission Banner -->
-<div id="notif-banner" style="display:none;position:fixed;bottom:80px;left:16px;right:16px;background:linear-gradient(135deg,#1a1035,#2d1b6b);border:1px solid rgba(124,58,237,0.4);border-radius:18px;padding:18px 20px;z-index:2000;box-shadow:0 8px 32px rgba(0,0,0,0.5);align-items:flex-start;gap:14px;max-width:480px;margin:0 auto;">
-  <div style="font-size:1.6rem;line-height:1;">🔔</div>
-  <div style="flex:1;">
-    <div style="font-weight:700;font-size:0.95rem;color:#fff;margin-bottom:4px;">Stay in the loop</div>
-    <div style="font-size:0.82rem;color:rgba(255,255,255,0.65);margin-bottom:14px;line-height:1.5;">Get pinged instantly when new orders come in — even when you're on another tab.</div>
-    <div style="display:flex;gap:10px;">
-      <button onclick="enableNotifications()" style="background:linear-gradient(135deg,#7C3AED,#9F67FA);color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:0.85rem;font-weight:600;cursor:pointer;">Enable Notifications</button>
-      <button onclick="dismissNotifBanner()" style="background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);border:none;border-radius:10px;padding:9px 14px;font-size:0.85rem;cursor:pointer;">Not now</button>
-    </div>
-  </div>
-</div>
-
 </body>
 </html>
