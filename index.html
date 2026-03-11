@@ -297,6 +297,12 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
           <option value="">Select location / area...</option>
         </select>
       </div>
+      <!-- Street address — shown after location is picked -->
+      <div id="street-addr-wrap" style="display:none;margin-top:10px;">
+        <label class="fl">Street Address <span style="color:#a78bfa;font-size:0.7rem;">(for delivery)</span></label>
+        <input type="text" class="fi" id="oc-addr" placeholder="e.g. 12 Broad Street, beside GTBank...">
+      </div>
+
       <div id="location-stock-info" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(124,58,237,0.07);border:1px solid rgba(124,58,237,0.18);border-radius:12px;">
         <div style="font-size:0.7rem;font-weight:700;color:#7C3AED;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">📦 Stock Available at this Location</div>
         <div id="location-stock-list" style="display:flex;flex-direction:column;gap:5px;"></div>
@@ -626,7 +632,14 @@ async function onLocationChange() {
   const infoBox = document.getElementById('location-stock-info');
   const stockList = document.getElementById('location-stock-list');
 
-  if (!partnerId) { infoBox.style.display = 'none'; return; }
+  if (!partnerId) {
+    infoBox.style.display = 'none';
+    document.getElementById('street-addr-wrap').style.display = 'none';
+    return;
+  }
+
+  // Show the street address input
+  document.getElementById('street-addr-wrap').style.display = 'block';
 
   stockList.innerHTML = '<div style="font-size:0.75rem;color:#888;">Loading...</div>';
   infoBox.style.display = 'block';
@@ -740,20 +753,23 @@ function reviewOrder() {
   const name = document.getElementById('oc-name').value.trim();
   const phone = document.getElementById('oc-phone').value.trim();
   const loc = document.getElementById('oc-loc').value.trim();
+  const addr = document.getElementById('oc-addr').value.trim();
+  const fullLocation = addr ? `${loc} — ${addr}` : loc;
   const sel = document.getElementById('o-prod');
   const pid = sel.value;
   const qty = parseInt(document.getElementById('o-qty').value)||0;
   const notes = document.getElementById('o-notes').value.trim();
   if (!name||!phone||!loc||!pid||qty<1) { toast('Fill in all required fields','error'); return; }
+  if (loc && !addr) { toast('Please enter the street address for delivery','error'); return; }
   const opt = sel.options[sel.selectedIndex];
   const price = parseFloat(opt.getAttribute('data-price'))||0;
   const stock = parseInt(opt.getAttribute('data-stock')||0);
   if (stock > 0 && qty > stock) { toast(`Only ${stock} units available in stock`,'error'); return; }
   const total = price * qty;
-  pendingOrder = { customer_name:name, customer_phone:phone, delivery_location:loc, product_id:pid, quantity:qty, unit_price:price, total_price:total, notes, rep_id:profile.id, status:'pending' };
+  pendingOrder = { customer_name:name, customer_phone:phone, delivery_location:fullLocation, product_id:pid, quantity:qty, unit_price:price, total_price:total, notes, rep_id:profile.id, status:'pending' };
   document.getElementById('mo-body').innerHTML = `
     <div style="display:flex;flex-direction:column;gap:2px;">
-      ${[['Customer',name],['Phone',phone],['Location',loc],['Product',opt.text.split(' — ')[0]],['Quantity',`${qty} × ₦${price.toLocaleString()}`]].map(([l,v])=>`
+      ${[['Customer',name],['Phone',phone],['Area',loc],['Address',addr||'—'],['Product',opt.text.split(' — ')[0]],['Quantity',`${qty} × ₦${price.toLocaleString()}`]].map(([l,v])=>`
       <div style="display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border);">
         <span style="font-size:0.77rem;color:var(--text3)">${l}</span>
         <span style="font-size:0.85rem;font-weight:600;color:var(--text);max-width:60%;text-align:right">${v}</span>
@@ -777,7 +793,9 @@ async function submitOrder() {
     if (!res.ok) { const e = await res.json(); throw new Error(e.message || JSON.stringify(e)); }
     closeMo('mo-confirm');
     toast('Order submitted! 🎉','success');
-    ['oc-name','oc-phone','oc-loc','o-notes'].forEach(id=>document.getElementById(id).value='');
+    ['oc-name','oc-phone','oc-loc','oc-addr','o-notes'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('street-addr-wrap').style.display = 'none';
+    document.getElementById('location-stock-info').style.display = 'none';
     document.getElementById('o-prod').value='';
     document.getElementById('o-qty').value='1';
     document.getElementById('o-uprice').value='';
