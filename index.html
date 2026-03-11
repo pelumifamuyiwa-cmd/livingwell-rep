@@ -291,7 +291,16 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
       <div class="fc-label">Customer Details</div>
       <div class="fg"><label class="fl">Customer Name</label><input type="text" class="fi" id="oc-name" placeholder="Full name"></div>
       <div class="fg"><label class="fl">Phone Number</label><input type="tel" class="fi" id="oc-phone" placeholder="08012345678"></div>
-      <div class="fg" style="margin-bottom:0"><label class="fl">Delivery Location</label><input type="text" class="fi" id="oc-loc" placeholder="State / Area / Address"></div>
+      <div class="fg" style="margin-bottom:0">
+        <label class="fl">Delivery Location</label>
+        <select class="fi-select" id="oc-loc" onchange="onLocationChange()">
+          <option value="">Select location / area...</option>
+        </select>
+      </div>
+      <div id="location-stock-info" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(124,58,237,0.07);border:1px solid rgba(124,58,237,0.18);border-radius:12px;">
+        <div style="font-size:0.7rem;font-weight:700;color:#7C3AED;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">📦 Stock Available at this Location</div>
+        <div id="location-stock-list" style="display:flex;flex-direction:column;gap:5px;"></div>
+      </div>
     </div>
     <div class="form-card">
       <div class="fc-label">Product Details</div>
@@ -587,42 +596,70 @@ function showPage(p) {
 }
 
 // PRODUCTS
+let logisticsPartners = [];
+
 async function loadProducts() {
   try {
-    // Load products with stock levels
-    products = await api('products?is_active=eq.true&select=*,stock(quantity)&order=name') || [];
+    // Load products
+    products = await api('products?is_active=eq.true&select=*&order=name') || [];
     const sel = document.getElementById('o-prod');
     sel.innerHTML = '<option value="">Choose product...</option>' +
-      products.map(p => {
-        const qty = p.stock?.[0]?.quantity || 0;
-        const outOfStock = qty === 0;
-        const lowStock = qty > 0 && qty <= 5;
-        const label = outOfStock ? ` — OUT OF STOCK` : lowStock ? ` — Low Stock (${qty} left)` : '';
-        return `<option value="${p.id}" data-price="${p.price}" data-stock="${qty}" ${outOfStock ? 'disabled' : ''}>${p.name} — ₦${parseFloat(p.price).toLocaleString()}${label}</option>`;
-      }).join('');
+      products.map(p =>
+        `<option value="${p.id}" data-price="${p.price}">${p.name} — ₦${parseFloat(p.price).toLocaleString()}</option>`
+      ).join('');
+
+    // Load logistics partners with their stock and coverage areas
+    const partners = await api('logistics_partners?select=id,name,coverage_area,phone&order=name') || [];
+    logisticsPartners = partners;
+    const locSel = document.getElementById('oc-loc');
+    locSel.innerHTML = '<option value="">Select location / area...</option>' +
+      partners.map(p =>
+        `<option value="${p.coverage_area}" data-partner-id="${p.id}" data-partner-name="${p.name}">${p.coverage_area} — ${p.name}</option>`
+      ).join('');
   } catch(e) {}
+}
+
+async function onLocationChange() {
+  const locSel = document.getElementById('oc-loc');
+  const opt = locSel.options[locSel.selectedIndex];
+  const partnerId = opt ? opt.getAttribute('data-partner-id') : null;
+  const infoBox = document.getElementById('location-stock-info');
+  const stockList = document.getElementById('location-stock-list');
+
+  if (!partnerId) { infoBox.style.display = 'none'; return; }
+
+  stockList.innerHTML = '<div style="font-size:0.75rem;color:#888;">Loading...</div>';
+  infoBox.style.display = 'block';
+
+  try {
+    const stocks = await api(`logistics_stock?logistics_partner_id=eq.${partnerId}&confirmed=eq.true&select=quantity_remaining,products(id,name)`) || [];
+    if (!stocks.length) {
+      stockList.innerHTML = '<div style="font-size:0.75rem;color:#D97706;">No confirmed stock at this location yet.</div>';
+      return;
+    }
+    stockList.innerHTML = stocks.map(s => {
+      const qty = s.quantity_remaining || 0;
+      const color = qty === 0 ? '#DC2626' : qty <= 5 ? '#D97706' : '#059669';
+      const label = qty === 0 ? 'Out of stock' : qty <= 5 ? `${qty} left (low)` : `${qty} available`;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;">
+        <span style="color:#1F2937;font-weight:600;">${s.products?.name || '—'}</span>
+        <span style="font-weight:700;color:${color};">${label}</span>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    stockList.innerHTML = '<div style="font-size:0.75rem;color:#DC2626;">Could not load stock info.</div>';
+  }
+
+  calcTotal();
 }
 
 function calcTotal() {
   const sel = document.getElementById('o-prod');
   const opt = sel.options[sel.selectedIndex];
   const price = opt ? parseFloat(opt.getAttribute('data-price'))||0 : 0;
-  const stock = opt ? parseInt(opt.getAttribute('data-stock')||0) : 0;
   const qty = parseInt(document.getElementById('o-qty').value)||0;
-
   document.getElementById('o-uprice').value = price ? `₦${price.toLocaleString()}` : '';
   document.getElementById('o-total').textContent = `₦${(price*qty).toLocaleString()}`;
-
-  // Warn if quantity exceeds stock
-  const warn = document.getElementById('stock-warning');
-  if (warn) {
-    if (stock > 0 && qty > stock) {
-      warn.textContent = `⚠️ Only ${stock} units available in stock`;
-      warn.style.display = 'block';
-    } else {
-      warn.style.display = 'none';
-    }
-  }
 }
 
 
