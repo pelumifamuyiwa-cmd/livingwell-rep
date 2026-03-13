@@ -309,19 +309,28 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
       </div>
     </div>
     <div class="form-card">
-      <div class="fc-label">Product Details</div>
-      <div class="fg">
-        <label class="fl">Select Product</label>
-        <select class="fi-select" id="o-prod" onchange="calcTotal()"><option value="">Choose product...</option></select>
+      <div class="fc-label">Products</div>
+      <!-- Add product row -->
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;">
+        <div class="fg" style="flex:2;margin-bottom:0;">
+          <label class="fl">Select Product</label>
+          <select class="fi-select" id="o-prod" onchange="onProductSelect()"><option value="">Choose product...</option></select>
+        </div>
+        <div class="fg" style="flex:1;margin-bottom:0;">
+          <label class="fl">Qty</label>
+          <input type="number" class="fi" id="o-qty" value="1" min="1">
+        </div>
+        <button onclick="addToCart()" style="flex-shrink:0;height:44px;padding:0 16px;background:var(--purple);border:none;color:#fff;border-radius:12px;font-size:0.8rem;font-weight:700;cursor:pointer;white-space:nowrap;">+ Add</button>
       </div>
-      <div class="form-row">
-        <div class="fg" style="margin-bottom:0"><label class="fl">Quantity</label><input type="number" class="fi" id="o-qty" value="1" min="1" oninput="calcTotal()"></div>
-        <div class="fg" style="margin-bottom:0"><label class="fl">Unit Price</label><input type="text" class="fi" id="o-uprice" readonly style="background:var(--bg3);color:var(--text2);" placeholder="—"></div>
-      </div>
+      <!-- Unit price display -->
+      <div id="o-uprice-wrap" style="display:none;margin-bottom:10px;font-size:0.75rem;color:var(--text3);">Unit price: <span id="o-uprice" style="color:var(--purple);font-weight:700;"></span></div>
+      <div id="stock-warning" style="display:none;margin-bottom:10px;padding:9px 12px;background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-b);border-radius:10px;font-size:0.75rem;font-weight:600;"></div>
+      <!-- Cart items -->
+      <div id="cart-items" style="display:flex;flex-direction:column;gap:6px;margin-bottom:4px;"></div>
+      <div id="cart-empty" style="font-size:0.78rem;color:var(--text3);text-align:center;padding:12px 0;">No products added yet</div>
     </div>
     <div class="form-card" style="padding:14px 18px;">
       <div class="total-row"><div class="total-label">Order Total</div><div class="total-val" id="o-total">₦0</div></div>
-      <div id="stock-warning" style="display:none;margin-top:10px;padding:9px 12px;background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-b);border-radius:10px;font-size:0.75rem;font-weight:600;"></div>
     </div>
     <div class="fg"><label class="fl">Notes (optional)</label><input type="text" class="fi" id="o-notes" placeholder="Special instructions..."></div>
     <button class="btn-submit" onclick="reviewOrder()">
@@ -599,6 +608,7 @@ function showPage(p) {
   if (p==='home') loadHome();
   else if (p==='orders') loadOrders();
   else if (p==='perf') loadPerf();
+  else if (p==='new-order') { cart = []; renderCart(); }
 }
 
 // PRODUCTS
@@ -666,14 +676,78 @@ async function onLocationChange() {
   calcTotal();
 }
 
-function calcTotal() {
+// ── CART SYSTEM ──
+let cart = []; // [{pid, name, qty, price}]
+
+function onProductSelect() {
   const sel = document.getElementById('o-prod');
   const opt = sel.options[sel.selectedIndex];
   const price = opt ? parseFloat(opt.getAttribute('data-price'))||0 : 0;
-  const qty = parseInt(document.getElementById('o-qty').value)||0;
-  document.getElementById('o-uprice').value = price ? `₦${price.toLocaleString()}` : '';
-  document.getElementById('o-total').textContent = `₦${(price*qty).toLocaleString()}`;
+  const wrap = document.getElementById('o-uprice-wrap');
+  const upriceEl = document.getElementById('o-uprice');
+  if (price) {
+    upriceEl.textContent = '₦' + price.toLocaleString();
+    wrap.style.display = 'block';
+  } else {
+    wrap.style.display = 'none';
+  }
 }
+
+function addToCart() {
+  const sel = document.getElementById('o-prod');
+  const pid = sel.value;
+  if (!pid) { toast('Select a product first', 'error'); return; }
+  const opt = sel.options[sel.selectedIndex];
+  const price = parseFloat(opt.getAttribute('data-price'))||0;
+  const stock = parseInt(opt.getAttribute('data-stock')||0);
+  const qty = parseInt(document.getElementById('o-qty').value)||0;
+  if (qty < 1) { toast('Quantity must be at least 1', 'error'); return; }
+  const name = opt.text.split(' — ')[0];
+  // Check if already in cart — update qty
+  const existing = cart.find(i => i.pid === pid);
+  const newQty = existing ? existing.qty + qty : qty;
+  if (stock > 0 && newQty > stock) { toast(`Only ${stock} units available`, 'error'); return; }
+  if (existing) {
+    existing.qty = newQty;
+  } else {
+    cart.push({ pid, name, qty, price });
+  }
+  // Reset selector
+  sel.value = '';
+  document.getElementById('o-qty').value = '1';
+  document.getElementById('o-uprice-wrap').style.display = 'none';
+  document.getElementById('stock-warning').style.display = 'none';
+  renderCart();
+}
+
+function removeFromCart(pid) {
+  cart = cart.filter(i => i.pid !== pid);
+  renderCart();
+}
+
+function renderCart() {
+  const container = document.getElementById('cart-items');
+  const empty = document.getElementById('cart-empty');
+  if (!cart.length) {
+    container.innerHTML = '';
+    empty.style.display = 'block';
+    document.getElementById('o-total').textContent = '₦0';
+    return;
+  }
+  empty.style.display = 'none';
+  const total = cart.reduce((s,i) => s + i.price * i.qty, 0);
+  container.innerHTML = cart.map(i => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg3);border-radius:10px;border:1px solid var(--border);">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:0.82rem;font-weight:700;color:var(--text);">\${i.name}</div>
+        <div style="font-size:0.72rem;color:var(--text3);">\${i.qty} × ₦\${i.price.toLocaleString()} = <span style="color:var(--purple);font-weight:700;">₦\${(i.price*i.qty).toLocaleString()}</span></div>
+      </div>
+      <button onclick="removeFromCart('\${i.pid}')" style="background:var(--red-bg);border:none;color:var(--red);border-radius:8px;width:28px;height:28px;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:8px;">×</button>
+    </div>`).join('');
+  document.getElementById('o-total').textContent = '₦' + total.toLocaleString();
+}
+
+function calcTotal() { /* legacy — no-op, cart handles totals */ }
 
 
 
@@ -755,55 +829,74 @@ function reviewOrder() {
   const loc = document.getElementById('oc-loc').value.trim();
   const addr = document.getElementById('oc-addr').value.trim();
   const fullLocation = addr ? `${loc} — ${addr}` : loc;
-  const sel = document.getElementById('o-prod');
-  const pid = sel.value;
-  const qty = parseInt(document.getElementById('o-qty').value)||0;
   const notes = document.getElementById('o-notes').value.trim();
-  if (!name||!phone||!loc||!pid||qty<1) { toast('Fill in all required fields','error'); return; }
+  if (!name||!phone||!loc) { toast('Fill in customer details','error'); return; }
   if (loc && !addr) { toast('Please enter the street address for delivery','error'); return; }
-  const opt = sel.options[sel.selectedIndex];
-  const price = parseFloat(opt.getAttribute('data-price'))||0;
-  const stock = parseInt(opt.getAttribute('data-stock')||0);
-  if (stock > 0 && qty > stock) { toast(`Only ${stock} units available in stock`,'error'); return; }
-  const total = price * qty;
-  pendingOrder = { customer_name:name, customer_phone:phone, delivery_location:fullLocation, product_id:pid, quantity:qty, unit_price:price, total_price:total, notes, rep_id:profile.id, status:'pending' };
+  if (!cart.length) { toast('Add at least one product','error'); return; }
+  const total = cart.reduce((s,i) => s + i.price * i.qty, 0);
+  // Build preview
+  const itemsHTML = cart.map(i => `
+    <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:0.8rem;color:var(--text3)">${i.name} × ${i.qty}</span>
+      <span style="font-size:0.82rem;font-weight:600;color:var(--text)">₦${(i.price*i.qty).toLocaleString()}</span>
+    </div>`).join('');
   document.getElementById('mo-body').innerHTML = `
     <div style="display:flex;flex-direction:column;gap:2px;">
-      ${[['Customer',name],['Phone',phone],['Area',loc],['Address',addr||'—'],['Product',opt.text.split(' — ')[0]],['Quantity',`${qty} × ₦${price.toLocaleString()}`]].map(([l,v])=>`
+      ${[['Customer',name],['Phone',phone],['Area',loc],['Address',addr||'—']].map(([l,v])=>`
       <div style="display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border);">
         <span style="font-size:0.77rem;color:var(--text3)">${l}</span>
         <span style="font-size:0.85rem;font-weight:600;color:var(--text);max-width:60%;text-align:right">${v}</span>
       </div>`).join('')}
+      <div style="margin-top:10px;margin-bottom:4px;font-size:0.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;">Products</div>
+      ${itemsHTML}
       <div style="display:flex;justify-content:space-between;align-items:center;background:var(--purple-dim);border-radius:12px;padding:14px 16px;margin-top:10px;border:1.5px solid var(--border2);">
         <span style="font-weight:700;color:var(--text2)">Total</span>
         <span style="font-size:1.3rem;font-weight:800;color:var(--purple);font-family:'DM Mono',monospace">₦${total.toLocaleString()}</span>
       </div>
     </div>`;
+  // Store for submit
+  pendingOrder = { customer_name:name, customer_phone:phone, delivery_location:fullLocation, notes, total };
   document.getElementById('mo-confirm').classList.add('open');
 }
 
 async function submitOrder() {
-  if (!pendingOrder) return;
+  if (!pendingOrder || !cart.length) return;
+  const btn = document.querySelector('#mo-confirm .btn-go');
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
   try {
-    const res = await fetch(`${SB}/rest/v1/orders`, {
-      method:'POST',
-      headers: { ...authH(), 'Prefer':'return=representation' },
-      body: JSON.stringify(pendingOrder)
-    });
-    if (!res.ok) { const e = await res.json(); throw new Error(e.message || JSON.stringify(e)); }
+    const { customer_name, customer_phone, delivery_location, notes } = pendingOrder;
+    const promises = cart.map(item =>
+      fetch(`${SB}/rest/v1/orders`, {
+        method:'POST',
+        headers: { ...authH(), 'Prefer':'return=representation' },
+        body: JSON.stringify({
+          customer_name, customer_phone, delivery_location, notes,
+          product_id: item.pid,
+          quantity: item.qty,
+          unit_price: item.price,
+          total_price: item.price * item.qty,
+          rep_id: profile.id,
+          status: 'pending'
+        })
+      }).then(r => { if (!r.ok) throw new Error('Failed for ' + item.name); return r.json(); })
+    );
+    await Promise.all(promises);
     closeMo('mo-confirm');
-    toast('Order submitted! 🎉','success');
+    toast(cart.length > 1 ? cart.length + ' orders submitted! 🎉' : 'Order submitted! 🎉', 'success');
     ['oc-name','oc-phone','oc-loc','oc-addr','o-notes'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('street-addr-wrap').style.display = 'none';
     document.getElementById('location-stock-info').style.display = 'none';
     document.getElementById('o-prod').value='';
     document.getElementById('o-qty').value='1';
-    document.getElementById('o-uprice').value='';
+    document.getElementById('o-uprice-wrap').style.display = 'none';
     document.getElementById('o-total').textContent='₦0';
+    cart = [];
+    renderCart();
     pendingOrder = null;
     loadProducts();
     setTimeout(()=>showPage('orders'),600);
   } catch(e) { toast('Failed: '+e.message,'error'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Submit Order'; } }
 }
 
 // PERFORMANCE
