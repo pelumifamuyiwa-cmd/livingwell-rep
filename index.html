@@ -608,7 +608,7 @@ function showPage(p) {
   if (p==='home') loadHome();
   else if (p==='orders') loadOrders();
   else if (p==='perf') loadPerf();
-  else if (p==='new-order') { cart = []; renderCart(); }
+  else if (p==='new-order') { cart = []; renderCart(); document.getElementById('o-prod').innerHTML = '<option value="">— Pick a location first —</option>'; document.getElementById('o-uprice-wrap').style.display='none'; }
 }
 
 // PRODUCTS
@@ -616,15 +616,14 @@ let logisticsPartners = [];
 
 async function loadProducts() {
   try {
-    // Load products
+    // Load products into memory only
     products = await api('products?is_active=eq.true&select=*&order=name') || [];
-    const sel = document.getElementById('o-prod');
-    sel.innerHTML = '<option value="">Choose product...</option>' +
-      products.map(p =>
-        `<option value="${p.id}" data-price="${p.price}">${p.name} — ₦${parseFloat(p.price).toLocaleString()}</option>`
-      ).join('');
 
-    // Load logistics partners with their stock and coverage areas
+    // Product dropdown starts locked — rep must pick location first
+    const sel = document.getElementById('o-prod');
+    sel.innerHTML = '<option value="">— Pick a location first —</option>';
+
+    // Load logistics partners
     const partners = await api('logistics_partners?select=id,name,coverage_area,phone&order=name') || [];
     logisticsPartners = partners;
     const locSel = document.getElementById('oc-loc');
@@ -645,6 +644,12 @@ async function onLocationChange() {
   if (!partnerId) {
     infoBox.style.display = 'none';
     document.getElementById('street-addr-wrap').style.display = 'none';
+    // Restore full product list
+    const sel = document.getElementById('o-prod');
+    sel.innerHTML = '<option value="">Choose product...</option>' +
+      products.map(p => `<option value="${p.id}" data-price="${p.price}" data-stock="0">${p.name} — ₦${parseFloat(p.price).toLocaleString()}</option>`).join('');
+    cart = [];
+    renderCart();
     return;
   }
 
@@ -655,25 +660,56 @@ async function onLocationChange() {
   infoBox.style.display = 'block';
 
   try {
-    const stocks = await api(`logistics_stock?logistics_partner_id=eq.${partnerId}&confirmed=eq.true&select=quantity_remaining,products(id,name)`) || [];
+    const stocks = await api(`logistics_stock?logistics_partner_id=eq.${partnerId}&confirmed=eq.true&select=quantity_remaining,products(id,name,price)`) || [];
+
+    // Rebuild product dropdown based on stock at this location
+    const sel = document.getElementById('o-prod');
+    sel.innerHTML = '<option value="">Choose product...</option>';
+
     if (!stocks.length) {
       stockList.innerHTML = '<div style="font-size:0.75rem;color:#D97706;">No confirmed stock at this location yet.</div>';
+      sel.innerHTML += '<option disabled>— No stock available at this location —</option>';
       return;
     }
+
+    // Populate dropdown: in-stock selectable, out-of-stock disabled
+    stocks.forEach(s => {
+      const qty = s.quantity_remaining || 0;
+      const p = s.products;
+      if (!p) return;
+      const price = parseFloat(p.price||0);
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.setAttribute('data-price', price);
+      opt.setAttribute('data-stock', qty);
+      if (qty === 0) {
+        opt.disabled = true;
+        opt.textContent = p.name + ' — OUT OF STOCK';
+      } else {
+        opt.textContent = p.name + ' — \u20a6' + price.toLocaleString() + ' (' + qty + ' left)';
+      }
+      sel.appendChild(opt);
+    });
+
+    // Stock info box
     stockList.innerHTML = stocks.map(s => {
       const qty = s.quantity_remaining || 0;
       const color = qty === 0 ? '#DC2626' : qty <= 5 ? '#D97706' : '#059669';
-      const label = qty === 0 ? 'Out of stock' : qty <= 5 ? `${qty} left (low)` : `${qty} available`;
-      return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;">
-        <span style="color:#1F2937;font-weight:600;">${s.products?.name || '—'}</span>
-        <span style="font-weight:700;color:${color};">${label}</span>
-      </div>`;
+      const label = qty === 0 ? 'Out of stock' : qty <= 5 ? (qty + ' left (low)') : (qty + ' available');
+      return '<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;">' +
+        '<span style="color:#1F2937;font-weight:600;">' + (s.products?.name || '—') + '</span>' +
+        '<span style="font-weight:700;color:' + color + ';">' + label + '</span></div>';
     }).join('');
+
+    // Reset cart when location changes
+    sel.value = '';
+    document.getElementById('o-uprice-wrap').style.display = 'none';
+    cart = [];
+    renderCart();
+
   } catch(e) {
     stockList.innerHTML = '<div style="font-size:0.75rem;color:#DC2626;">Could not load stock info.</div>';
   }
-
-  calcTotal();
 }
 
 // ── CART SYSTEM ──
@@ -702,6 +738,7 @@ function addToCart() {
   const stock = parseInt(opt.getAttribute('data-stock')||0);
   const qty = parseInt(document.getElementById('o-qty').value)||0;
   if (qty < 1) { toast('Quantity must be at least 1', 'error'); return; }
+  if (stock === 0) { toast('This product is out of stock at this location', 'error'); return; }
   const name = opt.text.split(' — ')[0];
   // Check if already in cart — update qty
   const existing = cart.find(i => i.pid === pid);
@@ -886,14 +923,14 @@ async function submitOrder() {
     ['oc-name','oc-phone','oc-loc','oc-addr','o-notes'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('street-addr-wrap').style.display = 'none';
     document.getElementById('location-stock-info').style.display = 'none';
-    document.getElementById('o-prod').value='';
+    document.getElementById('o-prod').innerHTML = '<option value="">— Pick a location first —</option>';
     document.getElementById('o-qty').value='1';
     document.getElementById('o-uprice-wrap').style.display = 'none';
     document.getElementById('o-total').textContent='₦0';
     cart = [];
     renderCart();
     pendingOrder = null;
-    loadProducts();
+    await loadProducts();
     setTimeout(()=>showPage('orders'),600);
   } catch(e) { toast('Failed: '+e.message,'error'); }
   finally { if (btn) { btn.disabled = false; btn.textContent = 'Submit Order'; } }
