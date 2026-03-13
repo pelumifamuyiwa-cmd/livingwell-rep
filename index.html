@@ -739,10 +739,10 @@ function renderCart() {
   container.innerHTML = cart.map(i => `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg3);border-radius:10px;border:1px solid var(--border);">
       <div style="flex:1;min-width:0;">
-        <div style="font-size:0.82rem;font-weight:700;color:var(--text);">\${i.name}</div>
-        <div style="font-size:0.72rem;color:var(--text3);">\${i.qty} × ₦\${i.price.toLocaleString()} = <span style="color:var(--purple);font-weight:700;">₦\${(i.price*i.qty).toLocaleString()}</span></div>
+        <div style="font-size:0.82rem;font-weight:700;color:var(--text);">${i.name}</div>
+        <div style="font-size:0.72rem;color:var(--text3);">${i.qty} × ₦${i.price.toLocaleString()} = <span style="color:var(--purple);font-weight:700;">₦${(i.price*i.qty).toLocaleString()}</span></div>
       </div>
-      <button onclick="removeFromCart('\${i.pid}')" style="background:var(--red-bg);border:none;color:var(--red);border-radius:8px;width:28px;height:28px;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:8px;">×</button>
+      <button onclick="removeFromCart('${i.pid}')" style="background:var(--red-bg);border:none;color:var(--red);border-radius:8px;width:28px;height:28px;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:8px;">×</button>
     </div>`).join('');
   document.getElementById('o-total').textContent = '₦' + total.toLocaleString();
 }
