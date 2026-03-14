@@ -307,6 +307,40 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
         <div style="font-size:0.7rem;font-weight:700;color:#7C3AED;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">📦 Stock Available at this Location</div>
         <div id="location-stock-list" style="display:flex;flex-direction:column;gap:5px;"></div>
       </div>
+
+      <!-- OTHER LOCATION SECTION -->
+      <div id="other-location-wrap" style="display:none;margin-top:12px;">
+        <div style="background:rgba(217,119,6,0.08);border:1.5px dashed rgba(217,119,6,0.4);border-radius:14px;padding:14px 16px;">
+          <div style="font-size:0.72rem;font-weight:700;color:#D97706;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">📍 Other Location — Manual Delivery</div>
+          <div style="font-size:0.75rem;color:#92400E;margin-bottom:12px;line-height:1.5;">This order will be flagged for <strong>manual delivery</strong>. Admin will arrange delivery directly. No stock limit applies.</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div>
+              <label class="fl">State</label>
+              <select class="fi-select" id="other-state" onchange="onOtherStateChange()" style="background:rgba(255,255,255,0.05);">
+                <option value="">Select state...</option>
+                <option>Abia</option><option>Adamawa</option><option>Akwa Ibom</option><option>Anambra</option>
+                <option>Bauchi</option><option>Bayelsa</option><option>Benue</option><option>Borno</option>
+                <option>Cross River</option><option>Delta</option><option>Ebonyi</option><option>Edo</option>
+                <option>Ekiti</option><option>Enugu</option><option>FCT — Abuja</option><option>Gombe</option>
+                <option>Imo</option><option>Jigawa</option><option>Kaduna</option><option>Kano</option>
+                <option>Katsina</option><option>Kebbi</option><option>Kogi</option><option>Kwara</option>
+                <option>Lagos</option><option>Nasarawa</option><option>Niger</option><option>Ogun</option>
+                <option>Ondo</option><option>Osun</option><option>Oyo</option><option>Plateau</option>
+                <option>Rivers</option><option>Sokoto</option><option>Taraba</option><option>Yobe</option>
+                <option>Zamfara</option>
+              </select>
+            </div>
+            <div>
+              <label class="fl">City / Town</label>
+              <input type="text" class="fi" id="other-city" placeholder="e.g. Ibadan, Benin City, Port Harcourt...">
+            </div>
+            <div>
+              <label class="fl">Full Street Address</label>
+              <input type="text" class="fi" id="other-addr" placeholder="e.g. 12 Broad Street, beside GTBank...">
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="form-card">
       <div class="fc-label">Products</div>
@@ -630,24 +664,47 @@ async function loadProducts() {
     locSel.innerHTML = '<option value="">Select location / area...</option>' +
       partners.map(p =>
         `<option value="${p.coverage_area}" data-partner-id="${p.id}" data-partner-name="${p.name}">${p.coverage_area} — ${p.name}</option>`
-      ).join('');
+      ).join('') +
+      `<option value="__other__" data-partner-id="" style="color:#D97706;font-weight:600;border-top:1px solid #444;">── Other Location (Outside Coverage Area) ──</option>`;
   } catch(e) {}
 }
 
 async function onLocationChange() {
   const locSel = document.getElementById('oc-loc');
   const opt = locSel.options[locSel.selectedIndex];
+  const val = locSel.value;
   const partnerId = opt ? opt.getAttribute('data-partner-id') : null;
   const infoBox = document.getElementById('location-stock-info');
   const stockList = document.getElementById('location-stock-list');
+  const otherWrap = document.getElementById('other-location-wrap');
+  const streetWrap = document.getElementById('street-addr-wrap');
+
+  // Reset other location fields
+  otherWrap.style.display = 'none';
+  document.getElementById('other-state').value = '';
+  document.getElementById('other-city').value = '';
+  document.getElementById('other-addr').value = '';
+
+  // Handle "Other Location" selection
+  if (val === '__other__') {
+    infoBox.style.display = 'none';
+    streetWrap.style.display = 'none';
+    otherWrap.style.display = 'block';
+    // Unlock ALL products with no stock restriction
+    const sel = document.getElementById('o-prod');
+    sel.innerHTML = '<option value="">Choose product...</option>' +
+      products.map(p => `<option value="${p.id}" data-price="${p.price}" data-stock="9999">${p.name} — ₦${parseFloat(p.price).toLocaleString()}</option>`).join('');
+    cart = [];
+    renderCart();
+    return;
+  }
 
   if (!partnerId) {
     infoBox.style.display = 'none';
-    document.getElementById('street-addr-wrap').style.display = 'none';
+    streetWrap.style.display = 'none';
     // Restore full product list
     const sel = document.getElementById('o-prod');
-    sel.innerHTML = '<option value="">Choose product...</option>' +
-      products.map(p => `<option value="${p.id}" data-price="${p.price}" data-stock="0">${p.name} — ₦${parseFloat(p.price).toLocaleString()}</option>`).join('');
+    sel.innerHTML = '<option value="">— Pick a location first —</option>';
     cart = [];
     renderCart();
     return;
@@ -710,6 +767,11 @@ async function onLocationChange() {
   } catch(e) {
     stockList.innerHTML = '<div style="font-size:0.75rem;color:#DC2626;">Could not load stock info.</div>';
   }
+}
+
+function onOtherStateChange() {
+  const city = document.getElementById('other-city');
+  if (city) city.focus();
 }
 
 // ── CART SYSTEM ──
@@ -864,12 +926,26 @@ function reviewOrder() {
   const name = document.getElementById('oc-name').value.trim();
   const phone = document.getElementById('oc-phone').value.trim();
   const loc = document.getElementById('oc-loc').value.trim();
-  const addr = document.getElementById('oc-addr').value.trim();
-  const fullLocation = addr ? `${loc} — ${addr}` : loc;
   const notes = document.getElementById('o-notes').value.trim();
   if (!name||!phone||!loc) { toast('Fill in customer details','error'); return; }
-  if (loc && !addr) { toast('Please enter the street address for delivery','error'); return; }
   if (!cart.length) { toast('Add at least one product','error'); return; }
+
+  let fullLocation = '';
+  let isManual = false;
+
+  if (loc === '__other__') {
+    // Other location — build from state + city + addr
+    const state = document.getElementById('other-state').value.trim();
+    const city = document.getElementById('other-city').value.trim();
+    const addr = document.getElementById('other-addr').value.trim();
+    if (!state || !city) { toast('Select state and enter city for other location','error'); return; }
+    fullLocation = `[MANUAL] ${city}, ${state}${addr ? ' — ' + addr : ''}`;
+    isManual = true;
+  } else {
+    const addr = document.getElementById('oc-addr').value.trim();
+    if (!addr) { toast('Please enter the street address for delivery','error'); return; }
+    fullLocation = `${loc} — ${addr}`;
+  }
   const total = cart.reduce((s,i) => s + i.price * i.qty, 0);
   // Build preview
   const itemsHTML = cart.map(i => `
@@ -877,12 +953,14 @@ function reviewOrder() {
       <span style="font-size:0.8rem;color:var(--text3)">${i.name} × ${i.qty}</span>
       <span style="font-size:0.82rem;font-weight:600;color:var(--text)">₦${(i.price*i.qty).toLocaleString()}</span>
     </div>`).join('');
+  const manualBadge = isManual ? `<div style="background:rgba(217,119,6,0.12);border:1.5px dashed rgba(217,119,6,0.45);border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:0.75rem;font-weight:700;color:#D97706;">⚠️ MANUAL DELIVERY — Admin will arrange delivery for this location</div>` : '';
   document.getElementById('mo-body').innerHTML = `
     <div style="display:flex;flex-direction:column;gap:2px;">
-      ${[['Customer',name],['Phone',phone],['Area',loc],['Address',addr||'—']].map(([l,v])=>`
+      ${manualBadge}
+      ${[['Customer',name],['Phone',phone],['Delivery To', fullLocation]].map(([l,v])=>`
       <div style="display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border);">
         <span style="font-size:0.77rem;color:var(--text3)">${l}</span>
-        <span style="font-size:0.85rem;font-weight:600;color:var(--text);max-width:60%;text-align:right">${v}</span>
+        <span style="font-size:0.85rem;font-weight:600;color:var(--text);max-width:65%;text-align:right">${v}</span>
       </div>`).join('')}
       <div style="margin-top:10px;margin-bottom:4px;font-size:0.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;">Products</div>
       ${itemsHTML}
@@ -892,7 +970,7 @@ function reviewOrder() {
       </div>
     </div>`;
   // Store for submit
-  pendingOrder = { customer_name:name, customer_phone:phone, delivery_location:fullLocation, notes, total };
+  pendingOrder = { customer_name:name, customer_phone:phone, delivery_location:fullLocation, notes, total, isManual: isManual||false };
   document.getElementById('mo-confirm').classList.add('open');
 }
 
@@ -907,7 +985,8 @@ async function submitOrder() {
         method:'POST',
         headers: { ...authH(), 'Prefer':'return=representation' },
         body: JSON.stringify({
-          customer_name, customer_phone, delivery_location, notes,
+          customer_name, customer_phone, delivery_location,
+          notes: pendingOrder.isManual ? `[MANUAL DELIVERY REQUIRED] ${notes||''}`.trim() : (notes||''),
           product_id: item.pid,
           quantity: item.qty,
           unit_price: item.price,
@@ -920,7 +999,8 @@ async function submitOrder() {
     await Promise.all(promises);
     closeMo('mo-confirm');
     toast(cart.length > 1 ? cart.length + ' orders submitted! 🎉' : 'Order submitted! 🎉', 'success');
-    ['oc-name','oc-phone','oc-loc','oc-addr','o-notes'].forEach(id=>document.getElementById(id).value='');
+    ['oc-name','oc-phone','oc-loc','oc-addr','o-notes','other-state','other-city','other-addr'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    document.getElementById('other-location-wrap').style.display='none';
     document.getElementById('street-addr-wrap').style.display = 'none';
     document.getElementById('location-stock-info').style.display = 'none';
     document.getElementById('o-prod').innerHTML = '<option value="">— Pick a location first —</option>';
